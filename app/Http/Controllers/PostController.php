@@ -14,21 +14,22 @@ class PostController extends Controller
      */
     public function index(Request $request)
     {
-          $query = $request->input('query');
+        $query = $request->input('query');
 
-    $posts = Post::with('user','category')
-        ->when($query, function($q) use ($query) {
-            $q->where('title', 'like', "%{$query}%")
-              ->orWhere('content', 'like', "%{$query}%");
-        })
-        ->latest()
-        ->paginate(6)
-         ->withQueryString();
+        $posts = Post::with(['user','category','likes','comments.user'])
+            ->when($query, function($q) use ($query) {
+                $q->where('title', 'like', "%{$query}%")
+                  ->orWhere('content', 'like', "%{$query}%");
+            })
+            ->latest()
+            ->paginate(6)
+            ->withQueryString();
 
-    $popularTags = ['AI','Web Dev','Design','Business']; // example
+        $popularTags = ['AI','Web Dev','Design','Business']; // example
 
-    return view('blog.index', compact('posts','popularTags','query'));
+        return view('blog.index', compact('posts','popularTags','query'));
     }
+    
 
     public function search(Request $request)
 {
@@ -108,6 +109,33 @@ if ($request->hasFile('postphoto')) {
     /**
      * Display a single post.
      */
+    // Like a post
+public function like(Post $post) {
+    $user = auth()->user();
+    $like = $post->likes()->where('user_id', $user->id)->first();
+    if ($like) {
+        $like->delete();
+    } else {
+        $post->likes()->create(['user_id' => $user->id]);
+    }
+    return back();
+}
+
+// Store comment
+ public function comment(Request $request, Post $post)
+    {
+        $request->validate([
+            'comment' => 'required|string|max:1000', // must match textarea name & column
+        ]);
+
+        $post->comments()->create([
+            'user_id' => auth()->id(),
+            'comment' => $request->comment,
+        ]);
+
+        return back();
+    }
+
     
   public function show($id)
 {

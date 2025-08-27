@@ -12,11 +12,11 @@ class Comments extends Model
 
     ];
 
-    public function Posts() {
+    public function Post() {
       return  $this->belongsTo(Post::class);
     }
 
-    public function Users() {
+    public function User() {
         return $this->belongsTo(User::class);
     }
 }
