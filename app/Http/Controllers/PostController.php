@@ -16,7 +16,13 @@ class PostController extends Controller
     {
         $query = $request->input('query');
 
-        $posts = Post::with(['user','category','likes','comments.user'])
+        $posts = Post::with(['user','category','likes',
+                // Load only the latest 4 comments with each post
+                        'comments' => function($q) {
+                            $q->latest()->take(4);
+                        },
+                 'comments.user'])
+            ->withCount('comments') // Get total comments coun
             ->when($query, function($q) use ($query) {
                 $q->where('title', 'like', "%{$query}%")
                   ->orWhere('content', 'like', "%{$query}%");
@@ -73,38 +79,45 @@ class PostController extends Controller
     // Validate the request
     $request->validate([
         'title' => 'required|string|max:255',
-        'subtitle' => 'string',
-        'content' => 'required|string', // Editor.js JSON string
-        'category_id' => 'required|exists:categories,id', // validate category
+        'subtitle' => 'nullable|string|max:255',
+        'content' => 'required|string',
+        'category_id' => 'required|exists:categories,id',
         'postphoto' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
     ]);
 
-    // Handle image upload
-   $postPhoto = null;
-if ($request->hasFile('postphoto')) {
-    $postPhoto = $request->file('postphoto')->store('post_photos', 'public');
-}
+    $postPhoto = null;
 
-    // Create the post
+    if ($request->hasFile('postphoto')) {
+        $file = $request->file('postphoto');
+
+        // Generate safe filename -> slug + timestamp + id + extension
+        $filename = \Str::slug($request->title) . '-' . time() . '.' . uniqid() . '.'. $file->getClientOriginalExtension();
+
+        // Store with custom name
+        $postPhoto = $file->storeAs('post_photos', $filename, 'public');
+    }
+    // Check duplicate post 
+            $exists = Post::where('title', $request->title)->where('user_id', Auth::id())->first();
+        if ($exists) {
+            return redirect()->back()->with('error', 'You already created a post with this title.');
+        }
+
+
     Post::create([
         'title' => $request->title,
         'subtitle' => $request->subtitle,
         'content' => $request->content,
-        'postphoto' => $postPhoto,
-        'user_id' => Auth::id(),             // current logged-in user ID
-        'category_id' => $request->category_id, // corrected extra comma
+        'postphoto' => $postPhoto,   // <-- stores "post_photos/filename.jpg"
+        'user_id' => Auth::id(),
+        'category_id' => $request->category_id,
     ]);
 
-     // Redirect based on route
     if ($request->routeIs('admin.*')) {
         return redirect()->route('admin.posts.index')->with('success', 'Post created successfully!');
     }
-    
-    // Redirect back with success message
-    return redirect()->route('blog.index')
-                     ->with('success', 'Post created successfully!');
-}
 
+    return redirect()->route('blog.index')->with('success', 'Post created successfully!');
+}
 
     /**
      * Display a single post.
@@ -177,40 +190,45 @@ public function like(Post $post) {
     /**
      * Update a post.
      */
-     public function update(Request $request, Post $post)
-{
-    $user = auth()->user();
+            public function update(Request $request, Post $post)
+        {
+            $user = auth()->user();
 
-    // Authorization check
-    if ($user->role !== 'admin' && $post->user_id !== $user->id) {
-        return redirect()->back()->with('error', 'You cannot update this post.');
-    }
+            // Authorization check
+            if ($user->role !== 'admin' && $post->user_id !== $user->id) {
+                return redirect()->back()->with('error', 'You cannot update this post.');
+            }
 
-    $request->validate([
-        'title' => 'required|string|max:255',
-        'subtitle' => 'nullable|string|max:255',
-        'content' => 'required|string',
-        'category_id' => 'required|exists:categories,id',
-        'postphoto' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
-    ]);
+            $request->validate([
+                'title' => 'required|string|max:255',
+                'subtitle' => 'nullable|string|max:255',
+                'content' => 'required|string',
+                'category_id' => 'required|exists:categories,id',
+                'postphoto' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            ]);
 
-    if ($request->hasFile('postphoto')) {
-        if ($post->postphoto && \Storage::disk('public')->exists($post->postphoto)) {
-            \Storage::disk('public')->delete($post->postphoto);
+            if ($request->hasFile('postphoto')) {
+                // Delete old photo if exists
+                if ($post->postphoto && \Storage::disk('public')->exists($post->postphoto)) {
+                    \Storage::disk('public')->delete($post->postphoto);
+                }
+
+                $file = $request->file('postphoto');
+                $filename = \Str::slug($request->title) . '-' . time() . '.' . $file->getClientOriginalExtension();
+                $post->postphoto = $file->storeAs('post_photos', $filename, 'public');
+            }
+
+            $post->update([
+                'title' => $request->title,
+                'subtitle' => $request->subtitle,
+                'content' => $request->content,
+                'category_id' => $request->category_id,
+                'postphoto' => $post->postphoto,
+            ]);
+
+            return redirect()->route('profile.index')->with('success', 'Post updated successfully!');
         }
-        $post->postphoto = $request->file('postphoto')->store('post_photos','public');
-    }
 
-    $post->update([
-        'title' => $request->title,
-        'subtitle' => $request->subtitle,
-        'content' => $request->content,
-        'category_id' => $request->category_id,
-        'postphoto' => $post->postphoto,
-    ]);
-
-    return redirect()->route('profile.index')->with('success','Post updated successfully!');
-}
 
 
 
@@ -253,7 +271,7 @@ public function adminEdit(Post $post)
 }
 
 // Admin: Update post
-public function adminUpdate(Request $request, Post $post)
+ public function adminUpdate(Request $request, Post $post)
 {
     $request->validate([
         'title' => 'required|string|max:255',
@@ -264,10 +282,14 @@ public function adminUpdate(Request $request, Post $post)
     ]);
 
     if ($request->hasFile('postphoto')) {
+        // Delete old photo if exists
         if ($post->postphoto && \Storage::disk('public')->exists($post->postphoto)) {
             \Storage::disk('public')->delete($post->postphoto);
         }
-        $post->postphoto = $request->file('postphoto')->store('post_photos','public');
+
+        $file = $request->file('postphoto');
+        $filename = \Str::slug($request->title) . '-' . time() . '.' . $file->getClientOriginalExtension();
+        $post->postphoto = $file->storeAs('post_photos', $filename, 'public');
     }
 
     $post->update([
@@ -278,8 +300,9 @@ public function adminUpdate(Request $request, Post $post)
         'postphoto' => $post->postphoto,
     ]);
 
-    return redirect()->route('admin.posts.index')->with('success','Post updated successfully!');
+    return redirect()->route('admin.posts.index')->with('success', 'Post updated successfully!');
 }
+
 
 // Admin: Delete post
 public function adminDestroy(Post $post)

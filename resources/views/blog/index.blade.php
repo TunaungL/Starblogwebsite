@@ -121,7 +121,7 @@
 
                             <!-- Comment Toggle -->
                             <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#comments-{{ $post->id }}">
-                                💬 {{ $post->comments->count() }}
+                                💬 {{ $post->comments_count }} comments
                             </button>
                         </div>
 

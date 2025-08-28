@@ -54,7 +54,7 @@
             <input type="file" name="postphoto" id="postphoto" class="form-control" accept="image/*" required>
         </div>
 
-        <button type="submit" class="btn btn-primary">Publish Post</button>
+        <button type="submit" class="btn btn-primary" onclick="this.disabled=true; this.form.submit();>Publish Post</button>
     </form>
 </div>
 @endsection

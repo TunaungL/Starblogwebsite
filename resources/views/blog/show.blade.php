@@ -3,6 +3,8 @@
 @section('title', $post->title . ' — STARBLOG')
 
 @section('content')
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <div class="container py-5 mx-auto" style="max-width: 850px; padding: 0 15px;">
 
     <h1 class="fw-bold display-5 mb-3 text-dark text-break">
@@ -57,6 +59,45 @@
     <article class="fs-5 text-dark mb-5" style="line-height: 1.8; font-family: 'Georgia', serif; word-wrap: break-word;">
     {!! nl2br(e($post->content)) !!}
     </article>
+<!-- Likes + Comments Section -->
+<div class="d-flex justify-content-start align-items-center gap-3 mt-4">
+
+    <!-- Like Button -->
+    <form action="{{ route('posts.like', $post->id) }}" method="POST">
+        @csrf
+        <button class="btn btn-sm btn-outline-primary">
+            👍 {{ $post->likes->count() }} Like{{ $post->likes->count() > 1 ? 's' : '' }}
+        </button>
+    </form>
+
+    <!-- Comment Toggle Button -->
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#comments-{{ $post->id }}">
+        💬 {{ $post->comments->count() }} Comment{{ $post->comments->count() > 1 ? 's' : '' }}
+    </button>
+</div>
+
+<!-- Collapsible Comment Section -->
+<div class="collapse mt-3" id="comments-{{ $post->id }}">
+    <!-- Comment Form -->
+    <form action="{{ route('posts.comment', $post->id) }}" method="POST">
+        @csrf
+        <div class="mb-2">
+            <textarea name="comment" class="form-control" rows="2" placeholder="Write a comment..."></textarea>
+        </div>
+        <button class="btn btn-sm btn-primary">Comment</button>
+    </form>
+
+    <!-- Existing Comments -->
+    <div class="mt-3">
+        @foreach($post->comments as $comment)
+            <div class="border-top pt-2 mt-2">
+                <strong>{{ $comment->user->name ?? 'Guest' }}</strong>:
+                {{ $comment->comment }}
+                <div class="small text-muted">{{ $comment->created_at->diffForHumans() }}</div>
+            </div>
+        @endforeach
+    </div>
+</div>
 
  <!-- #region -->
  <!-- Related Posts -->
