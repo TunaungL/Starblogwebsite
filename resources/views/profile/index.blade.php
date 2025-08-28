@@ -7,7 +7,7 @@
 </div>
 
 <div class="container py-5">
-    <h3 class="mt-4">Index Posts</h3>
+    <h3 class="mt-4">Yours Posts</h3>
 
     @if ($posts->isEmpty())
         <p>You haven't created any post yet.</p>
